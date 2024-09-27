@@ -26,7 +26,8 @@ Forecasts indicate that unemployment will gradually increase in the next few qua
 Using the ARIMA model, the GDP is expected to reach €307 billion by 2028, while unemployment will experience slight increases over the next few years.
 #   Files in the Repository
 projekt_drabkova.pdf: Contains the full analysis in Czech, including time-series graphs, model selection, and forecasting results.
-projekt_1cast_drabkova.R: The R script used for the time series analysis and forecasting.
+project_part1.R: The R script used for the time series analysis and forecasting.
+project_part2.R: The R script used for the time series analysis and forecasting.
 #   Methods Used
 ARIMA for forecasting GDP.
 Vector Autoregression (VAR) for examining the dynamic relationship between GDP and unemployment.
