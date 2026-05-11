@@ -1,11 +1,10 @@
-###########
-# PROJEKT #
-###########
+#############################################################
+# PROJECT: Multivariate Time Series Analysis (VAR) 
+#          Finland's GDP and Unemployment (2009-2023)
+#############################################################
 
-# DATOVÝ SOUBOR - data_HDP_nez - Finsko
-############################################
-
-
+# 1. ENVIRONMENT SETUP & DATA LOADING
+# -----------------------------------
 library(readxl)
 library(vars)
 library(tsDyn)
@@ -16,186 +15,188 @@ library(tseries)
 library(forecast)
 library(urca)
 
+# Load the first dataset (Levels/Original data)
+data_GDP_unemp1 <- read_excel("finland.xlsx", sheet="GDP_unemp")
+GDP1 <- ts(data_GDP_unemp1$HDP, start=c(2009,1), frequency=4) # Quarterly data
+unemp1 <- ts(data_GDP_unemp1$nezamestnanost, start=c(2009,1), frequency=4)
+unemp_diff <- diff(unemp1)
+gdp_unemp1 <- cbind(GDP1, unemp1) # Multivariate time series object
 
-data_HDP_nez1 <- read_excel("MECR/finsko.xlsx", sheet="HDP_nez") # načtení datového souboru z Excelu
-HDP1 <- ts(data_HDP_nez1$HDP, start=c(2009,1), frequency=4) # data jako časová řada
-nezamestnanost1 <- ts(data_HDP_nez1$nezamestnanost, start=c(2009,1), frequency=4) # data jako časová řada
-nez_diff <- diff(nezamestnanost1)
-hdpnez1 <- cbind(HDP1, nezamestnanost1)
-
-
-data_HDP_nez <- read_excel("MECR/finsko.xlsx", sheet="HDP_diff_nez") # načtení datového souboru z Excelu
-HDP <- ts(data_HDP_nez$HDP, start=c(2009,2), frequency=4) # data jako časová řada
-nezamestnanost <- ts(data_HDP_nez$diference, start=c(2009,2), frequency=4) # data jako časová řada
-hdpnez <- cbind(HDP, nezamestnanost)
-
-
-# Grafické zobrazení časové řady
-#-------------------------------
-
-plot.ts(HDP1, main="Mezičtvrtletní procentní růsty HDP Finska", col=5, lwd=3, ylab="procenta", xlab="období")
-plot.ts(nezamestnanost1, main="Nezaměstnanosti Finska v %", col=5, lwd=3, ylab="procento pracovní síly populace", xlab="období")
-plot.ts(ts.union(HDP1, nezamestnanost1), main="Grafické zobrazení vícerozměrné časové řady") # zobrazení vícerozměné časové řady
-plot.ts(hdpnez1, main="Grafické zobrazení vícerozměrné časové řady", col=5, lwd=3) # zobrazení vícerozměrné časové řady
-
-plot.ts(HDP, main="Mezičtvrtletní procentní růsty HDP Finska", col=5, lwd=3, ylab="procenta", xlab="období")
-plot.ts(nezamestnanost, main="První diference nezaměstnanosti Finska v %", col=5, lwd=3, ylab="procento pracovní síly populace", xlab="období")
-plot.ts(ts.union(HDP, nezamestnanost), main="Grafické zobrazení vícerozměrné časové řady") # zobrazení vícerozměné časové řady
-plot.ts(hdpnez, main="Grafické zobrazení vícerozměrné časové řady", col=5, lwd=3) # zobrazení vícerozměrné časové řady
+# Load the second dataset (Differenced unemployment data)
+data_GDP_unemp <- read_excel("finland.xlsx", sheet="GDP_diff_unemp") 
+GDP <- ts(data_GDP_unemp$HDP, start=c(2009,2), frequency=4)
+unemp <- ts(data_GDP_unemp$diference, start=c(2009,2), frequency=4) # Differenced unemp.
+gdp_unemp <- cbind(GDP, unemp)
 
 
-# Korelogramy pro jednotlivé řady
-#--------------------------------
+# 2. EXPLORATORY DATA ANALYSIS (EDA)
+# -----------------------------------
+# Plotting the original series (Levels)
+plot.ts(GDP1, main="Quarter-on-Quarter % Growth of Finland's GDP", col=5, lwd=3, ylab="Percentage (%)", xlab="Quarter")
+plot.ts(unemp1, main="Unemployment Rate in Finland (%)", col=5, lwd=3, ylab="% of Labor Force", xlab="Quarter")
+plot.ts(ts.union(GDP1, unemp1), main="Multivariate Time Series (Original Data)") 
+plot.ts(gdp_unemp1, main="Multivariate Time Series Overlay", col=5, lwd=3) 
 
-layout(matrix(1:2,2,1)) # nastavení výstupního okna pro grafy 2x1
-
-acf(HDP1, main="Autokorelační funkce (ACF) pro Mezičtvrtletní procentní růsty HDP Finska")
-pacf(HDP1, main="Parciální autokorelační funkce (PACF) pro Mezičtvrtletní procentní růsty HDP Finska")
-
-acf(nezamestnanost1, main="Autokorelační funkce (ACF) pro nezaměstnanost Finska")
-pacf(nezamestnanost1, main="Parciální autokorelační funkce (PACF) pro nezaměstnanost Finska")
-
-acf(HDP, main="Autokorelační funkce (ACF) pro Mezičtvrtletní procentní růsty HDP Finska")
-pacf(HDP, main="Parciální autokorelační funkce (PACF) pro Mezičtvrtletní procentní růsty HDP Finska")
-
-acf(nezamestnanost, main="Autokorelační funkce (ACF) pro první diference nezaměstnanosti Finska")
-pacf(nezamestnanost, main="Parciální autokorelační funkce (PACF) pro první diference nezaměstnanosti Finska")
-
-layout(matrix(1:1,1,1)) # nastavení výstupního okna pro grafy do původni podoby
-
-adf.test(HDP1)
-pp.test(HDP1)
-kpss.test(HDP1)
-
-adf.test(nezamestnanost1)
-pp.test(nezamestnanost1)
-kpss.test(nezamestnanost1)
-
-adf.test(diff(nezamestnanost1))
-pp.test(diff(nezamestnanost1))
-kpss.test(diff(nezamestnanost1))
-
-adf.test(HDP)
-pp.test(HDP)
-kpss.test(HDP)
-
-adf.test(nezamestnanost)
-pp.test(nezamestnanost)
-kpss.test(nezamestnanost)
-
-# Graf korelační a parciální korelační maticové funkce
-#-----------------------------------------------------
-
-acf(hdpnez)
-pacf(hdpnez)
+# Plotting the differenced series
+plot.ts(GDP, main="Quarter-on-Quarter % Growth of Finland's GDP", col=5, lwd=3, ylab="Percentage (%)", xlab="Quarter")
+plot.ts(unemp, main="First Difference of Finland's Unemployment Rate", col=5, lwd=3, ylab="% of Labor Force (Differenced)", xlab="Quarter")
+plot.ts(ts.union(GDP, unemp), main="Multivariate Time Series (Differenced Data)") 
+plot.ts(gdp_unemp, main="Multivariate Time Series Overlay (Differenced Data)", col=5, lwd=3)
 
 
-# Křížový korelogram
-#-------------------
+# 3. CORRELOGRAMS (ACF & PACF)
+# -----------------------------------
+layout(matrix(1:2,2,1)) # Set plot layout to 2 rows, 1 column (2x1)
 
-ccf(HDP, nezamestnanost)
+# Original Series
+acf(GDP1, main="ACF for QoQ % Growth of Finland's GDP")
+pacf(GDP1, main="PACF for QoQ % Growth of Finland's GDP")
 
+acf(unemp1, main="ACF for Unemployment Rate in Finland")
+pacf(unemp1, main="PACF for Unemployment Rate in Finland")
 
-# Automatický návrh VAR modelu
-#-----------------------------
+# Differenced Series
+acf(GDP, main="ACF for QoQ % Growth of Finland's GDP")
+pacf(GDP, main="PACF for QoQ % Growth of Finland's GDP")
 
-VARselect(hdpnez, type = "const")
-VARselect(hdpnez, type = "trend")
-VARselect(hdpnez, type = "both")
-VARselect(hdpnez, type = "none")
+acf(unemp, main="ACF for First Difference of Unemployment Rate")
+pacf(unemp, main="PACF for First Difference of Unemployment Rate")
 
-
- # Odhad VAR modelu
-#-----------------
-
-hdpm1.odhad1 <- VAR(hdpnez, p = 1, type = "const"); summary(hdpm1.odhad1)
-hdpm1.odhad2 <- VAR(hdpnez, p = 1, type = "trend"); summary(hdpm1.odhad2)
-hdpm1.odhad3 <- VAR(hdpnez, p = 1, type = "both"); summary(hdpm1.odhad3)
-hdpm1.odhad4 <- VAR(hdpnez, p = 1, type = "none"); summary(hdpm1.odhad4)
-
-hdpm1.odhad1 <- VAR(hdpnez, p = 2, type = "const"); summary(hdpm1.odhad1)   #no
-hdpm1.odhad2 <- VAR(hdpnez, p = 2, type = "trend"); summary(hdpm1.odhad2)   #no
-hdpm1.odhad3 <- VAR(hdpnez, p = 2, type = "both"); summary(hdpm1.odhad3)    #no
-hdpm1.odhad4 <- VAR(hdpnez, p = 2, type = "none"); summary(hdpm1.odhad4)    #no
-
-hdpm1.odhad1 <- VAR(hdpnez, p = 3, type = "const"); summary(hdpm1.odhad1)   #no
-hdpm1.odhad2 <- VAR(hdpnez, p = 3, type = "trend"); summary(hdpm1.odhad2)   #no
-hdpm1.odhad3 <- VAR(hdpnez, p = 3, type = "both"); summary(hdpm1.odhad3)    #no
-hdpm1.odhad4 <- VAR(hdpnez, p = 3, type = "none"); summary(hdpm1.odhad4)    #no
-
-hdpm1.odhad1 <- VAR(hdpnez, p = 4, type = "const"); summary(hdpm1.odhad1)   #no
-hdpm1.odhad2 <- VAR(hdpnez, p = 4, type = "trend"); summary(hdpm1.odhad2)   #no
-hdpm1.odhad3 <- VAR(hdpnez, p = 4, type = "both"); summary(hdpm1.odhad3)    #no
-hdpm1.odhad4 <- VAR(hdpnez, p = 4, type = "none"); summary(hdpm1.odhad4)    #no
-
-hdpm1.odhad1 <- VAR(hdpnez, p = 5, type = "const"); summary(hdpm1.odhad1)   #no
-hdpm1.odhad2 <- VAR(hdpnez, p = 5, type = "trend"); summary(hdpm1.odhad2)   #no
-hdpm1.odhad3 <- VAR(hdpnez, p = 5, type = "both"); summary(hdpm1.odhad3)    #no
-hdpm1.odhad4 <- VAR(hdpnez, p = 5, type = "none"); summary(hdpm1.odhad4)    #no
-
-hdpm1.odhad1 <- VAR(hdpnez, p = 6, type = "const"); summary(hdpm1.odhad1)   #no
-hdpm1.odhad2 <- VAR(hdpnez, p = 6, type = "trend"); summary(hdpm1.odhad2)   #no
-hdpm1.odhad3 <- VAR(hdpnez, p = 6, type = "both"); summary(hdpm1.odhad3)    #no
-hdpm1.odhad4 <- VAR(hdpnez, p = 6, type = "none"); summary(hdpm1.odhad4)    #no
-
-hdpm1.odhad1 <- VAR(hdpnez, p = 7, type = "const"); summary(hdpm1.odhad1)   #no
-hdpm1.odhad2 <- VAR(hdpnez, p = 7, type = "trend"); summary(hdpm1.odhad2)   #no
-hdpm1.odhad3 <- VAR(hdpnez, p = 7, type = "both"); summary(hdpm1.odhad3)    #no
-hdpm1.odhad4 <- VAR(hdpnez, p = 7, type = "none"); summary(hdpm1.odhad4)    #no
-
-hdpm1.odhad1 <- VAR(hdpnez, p = 8, type = "const"); summary(hdpm1.odhad1)   #no
-hdpm1.odhad2 <- VAR(hdpnez, p = 8, type = "trend"); summary(hdpm1.odhad2)   #no
-hdpm1.odhad3 <- VAR(hdpnez, p = 8, type = "both"); summary(hdpm1.odhad3)    #no
-hdpm1.odhad4 <- VAR(hdpnez, p = 8, type = "none"); summary(hdpm1.odhad4)    #no
-
-remove(hdpm1.odhad1, hdpm1.odhad2, hdpm1.odhad3, hdpm1.odhad4)
-
-# Analýza zvoleného VAR modelu
-#-----------------------------
-
-plot(hdpm1.odhad4)
-serial.test(hdpm1.odhad4)
-plot(serial.test(hdpm1.odhad4))
-arch.test(hdpm1.odhad4)
-normality.test(hdpm1.odhad4)
-
-# Dekompozice chyby předpovědi
-#-----------------------------
-
-fevd(hdpm1.odhad4, n.ahead = 10)
-plot(fevd(hdpm1.odhad4, n.ahead = 10))
+layout(matrix(1:1,1,1)) # Reset plot layout (1x1)
 
 
-  # Stabilita parameteru VAR modelu
-#--------------------------------
+# 4. STATIONARITY TESTING
+# -----------------------------------
+# Augmented Dickey-Fuller, Phillips-Perron, and KPSS tests
+# Original Series
+adf.test(GDP1)
+pp.test(GDP1)
+kpss.test(GDP1)
 
-plot(stability(hdpm1.odhad4, type = "Rec-CUSUM"))
+adf.test(unemp1)
+pp.test(unemp1)
+kpss.test(unemp1)
+
+adf.test(diff(unemp1))
+pp.test(diff(unemp1))
+kpss.test(diff(unemp1))
+
+# Differenced Series (Used for VAR)
+adf.test(GDP)
+pp.test(GDP)
+kpss.test(GDP)
+
+adf.test(unemp)
+pp.test(unemp)
+kpss.test(unemp)
 
 
-# Predikce VAR modelu
-#--------------------
-predict(hdpm1.odhad4, n.ahead = 1, ci = 0.95)
-plot(predict(hdpm1.odhad4, n.ahead = 1, ci = 0.95))
+# 5. CROSS-CORRELATION ANALYSIS
+# -----------------------------------
+# Multivariate ACF and PACF matrices
+acf(gdp_unemp)
+pacf(gdp_unemp)
 
-predict(hdpm1.odhad4, n.ahead = 10, ci = 0.95)
-plot(predict(hdpm1.odhad4, n.ahead = 10, ci = 0.95))
-
-
-# Impulse-Response analýza
-#-------------------------
-
-irf(hdpm1.odhad4, impulse = "HDP", response = "nezamestnanost", boot = TRUE)
-plot(irf(hdpm1.odhad4, impulse = "HDP", response = "nezamestnanost", boot = TRUE))
-
-irf(hdpm1.odhad4, impulse = "nezamestnanost", response = "HDP", boot = TRUE)
-plot(irf(hdpm1.odhad4, impulse = "nezamestnanost", response = "HDP", boot = TRUE))
+# Cross-correlation function between GDP and Unemployment
+ccf(GDP, unemp, main="Cross-Correlation between GDP and Unemployment")
 
 
-# Grangerova kauzalita
-#---------------------
+# 6. VAR MODEL SELECTION & ESTIMATION
+# -----------------------------------
+# Automatic lag selection criteria (AIC, HQ, SC, FPE)
+VARselect(gdp_unemp, type = "const")
+VARselect(gdp_unemp, type = "trend")
+VARselect(gdp_unemp, type = "both")
+VARselect(gdp_unemp, type = "none")
 
-causality(hdpm1.odhad4, cause="HDP")
-causality(hdpm1.odhad4, cause="nezamestnanost")
+# Manual testing of various lag lengths (p) and deterministic terms
+# Inspecting models to find the best fit. Most higher lags are discarded (#).
+var_test1 <- VAR(gdp_unemp, p = 1, type = "const"); summary(var_test1)
+var_test2 <- VAR(gdp_unemp, p = 1, type = "trend"); summary(var_test2)
+var_test3 <- VAR(gdp_unemp, p = 1, type = "both"); summary(var_test3)
+var_test4 <- VAR(gdp_unemp, p = 1, type = "none"); summary(var_test4)
+
+# var_test1 <- VAR(gdp_unemp, p = 2, type = "const"); summary(var_test1) 
+# var_test2 <- VAR(gdp_unemp, p = 2, type = "trend"); summary(var_test2)
+# var_test3 <- VAR(gdp_unemp, p = 2, type = "both"); summary(var_test3)
+# var_test4 <- VAR(gdp_unemp, p = 2, type = "none"); summary(var_test4)
+
+# var_test1 <- VAR(gdp_unemp, p = 3, type = "const"); summary(var_test1)
+# var_test2 <- VAR(gdp_unemp, p = 3, type = "trend"); summary(var_test2)
+# var_test3 <- VAR(gdp_unemp, p = 3, type = "both"); summary(var_test3)
+# var_test4 <- VAR(gdp_unemp, p = 3, type = "none"); summary(var_test4)
+
+# var_test1 <- VAR(gdp_unemp, p = 4, type = "const"); summary(var_test1)
+# var_test2 <- VAR(gdp_unemp, p = 4, type = "trend"); summary(var_test2)
+# var_test3 <- VAR(gdp_unemp, p = 4, type = "both"); summary(var_test3)
+# var_test4 <- VAR(gdp_unemp, p = 4, type = "none"); summary(var_test4)
+
+
+# Testing higher order lags (results generally unsatisfactory)
+
+# Removing temporary test models to clear environment
+remove(var_test1, var_test2, var_test3, var_test4)
+
+# DEFINING THE FINAL SELECTED MODEL
+# Based on the criteria above, we select p=1 and type="none"
+var_final <- VAR(gdp_unemp, p = 1, type = "none")
+summary(var_final)
+
+
+# 7. VAR MODEL DIAGNOSTICS
+# -----------------------------------
+plot(var_final)
+
+# Portmanteau Test for serial correlation in residuals
+serial.test(var_final)
+plot(serial.test(var_final))
+
+# ARCH (Heteroskedasticity) and Normality tests for residuals
+arch.test(var_final)
+normality.test(var_final)
+
+
+# 8. FORECAST ERROR VARIANCE DECOMPOSITION (FEVD)
+# -----------------------------------------------
+# Analyzes the contribution of each variable's shock to the variance of the forecast error
+fevd_model <- fevd(var_final, n.ahead = 10)
+plot(fevd_model, main="Variance Decomposition")
+
+
+# 9. MODEL STABILITY (STRUCTURAL BREAKS)
+# --------------------------------------
+# Testing the structural stability of the estimated VAR parameters
+plot(stability(var_final, type = "Rec-CUSUM"), main="CUSUM Stability Test")
+
+
+# 10. FORECASTING
+# -----------------------------------
+# Short-term forecast (1 quarter ahead)
+predict(var_final, n.ahead = 1, ci = 0.95)
+plot(predict(var_final, n.ahead = 1, ci = 0.95), main="1-Quarter Ahead Forecast")
+
+# Long-term forecast (10 quarters ahead)
+predict(var_final, n.ahead = 10, ci = 0.95)
+plot(predict(var_final, n.ahead = 10, ci = 0.95), main="10-Quarter Ahead Forecast")
+
+
+# 11. IMPULSE-RESPONSE FUNCTION (IRF) ANALYSIS
+# --------------------------------------------
+# Tracing the effect of a one-time shock to one of the innovations on current and future values
+# Shock to GDP -> Response in Unemployment
+irf_gdp_unemp <- irf(var_final, impulse = "GDP", response = "unemp", boot = TRUE)
+plot(irf_gdp_unemp, main="Impulse: GDP, Response: Unemployment")
+
+# Shock to Unemployment -> Response in GDP
+irf_unemp_gdp <- irf(var_final, impulse = "unemp", response = "GDP", boot = TRUE)
+plot(irf_unemp_gdp, main="Impulse: Unemployment, Response: GDP")
+
+
+# 12. GRANGER CAUSALITY TESTS
+# -----------------------------------
+# Testing if one time series is useful in forecasting another
+causality(var_final, cause="GDP")
+causality(var_final, cause="unemp")
 
 
 
