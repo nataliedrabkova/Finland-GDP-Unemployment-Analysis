@@ -1,156 +1,186 @@
-###########
-# PROJEKT #
-###########
+#############################################################
+# PROJECT: Time Series Analysis of Finland's GDP (1980-2023)
+#############################################################
 
-# DATOVÝ SOUBOR - data_HDP - Finsko
-############################################
-
+# 1. ENVIRONMENT SETUP & DATA LOADING
+# -----------------------------------
 library(readxl)
 library(tseries)
 library(forecast)
 library(urca)
 library(FinTS)
+library(strucchange)
 
-data_HDP <- read_excel("~/MECR/data_HDPfin.xlsx", sheet = "finsko")
-HDP <- ts(data_HDP$HDP, start = 1980, frequency = 1)
+# Load data
+data_GDP <- read_excel("data_GDPfin.xlsx", sheet = "finland")
+GDP <- ts(data_GDP$GDP, start = 1980, frequency = 1)    # Time series, annual data
 
-summary(HDP)
+# Basic descriptive statistics
+summary(GDP)
 
-plot.ts(HDP, main="Roční HDP ve Finsku v období 1980-2023", col=5, lwd=3, ylab="HDP v mil. eur", xlab="období")
-plot.ts(diff(HDP), main="První diference HDP ve Finsku v období 1980-2023", col=5, lwd=3, ylab="HDP", xlab="období")
-plot.ts(diff(diff(HDP)), main="Druhé diference HDP ve Finsku v období 1980-2023", col=5, lwd=3, ylab="HDP", xlab="období")
 
-var(HDP)
-var(diff(HDP))
-var(diff(diff(HDP)))#vyšší rozptyl!!!
+# 2. EXPLORATORY DATA ANALYSIS (EDA)
+# -----------------------------------
+# Plotting the original time series and its differences
+plot.ts(GDP, main="Annual GDP in Finland (1980-2023)", col=5, lwd=3, ylab="GDP [mil. EUR]", xlab="Year")
+plot.ts(diff(GDP), main="First Difference of Finland's GDP (1980-2023)", col=5, lwd=3, ylab="Differenced GDP", xlab="Year")
+plot.ts(diff(diff(GDP)), main="Second Difference of Finland's GDP (1980-2023)", col=5, lwd=3, ylab="Differenced GDP", xlab="Year")
 
+# Checking variance to determine the appropriate order of differencing
+var(GDP)
+var(diff(GDP))
+var(diff(diff(GDP))) # higher variance! - indicates over-differencing
+
+# Autocorrelation (ACF) and Partial Autocorrelation (PACF) plots
 layout(matrix(1:2,2,1))
 
-acf(HDP, main="Autokorelační funkce pro roční HDP ve Finsku v obodbí 1980-2023")
-pacf(HDP, main="Parciální autokorelační funkce pro pro roční HDP ve Finsku v obodbí 1980-2023")
+acf(GDP, main="ACF for Annual GDP in Finland (1980-2023)")
+pacf(GDP, main="PACF for Annual GDP in Finland (1980-2023)")
 
-acf(diff(HDP), main="Autokorelační funkce pro první diference ročního HDP ve Finsku v obodbí 1980-2023")
-pacf(diff(HDP), main="Parciální autokorelační funkce pro první diference ročního HDP ve Finsku v obodbí 1980-2023")
+acf(diff(GDP), main="ACF for First Difference of GDP in Finland")
+pacf(diff(GDP), main="PACF for First Difference of GDP in Finland")
 
-acf(diff(diff(HDP)), main="Autokorelační funkce pro druhé diference ročního HDP ve Finsku v obodbí 1980-2023")
-pacf(diff(diff(HDP)), main="Parciální autokorelační funkce pro druhé diference ročního HDP ve Finsku v obodbí 1980-2023")
+acf(diff(diff(GDP)), main="ACF for Second Difference of GDP in Finland")
+pacf(diff(diff(GDP)), main="PACF for Second Difference of  GDP in Finland")
 
-layout(matrix(1:1,1,1))
+layout(matrix(1:1,1,1)) # Reset plot layout
 
-ArchTest(HDP)
-ArchTest(diff(HDP))
+# Testing for ARCH effects (Heteroskedasticity)
+ArchTest(GDP)
+ArchTest(diff(GDP))
 
+
+# 3. STRUCTURAL BREAKS ANALYSIS
+# -----------------------------------
+# Fitting a simple linear trend model
 time <- ts(1:44, start = 1980, frequency = 1)
-tslm.lin_HDP <- tslm(HDP ~ trend)
-summary(tslm.lin_HDP)
-plot.ts(HDP, main="Roční HDP Finska")
-lines(fitted(tslm.lin_HDP), col="blue", lwd=2)
+tslm.lin_GDP <- tslm(GDP ~ trend)
+summary(tslm.lin_GDP)
 
-library(strucchange)
-res1_HDP <- Fstats(HDP ~ 1+time, from = 0.20) # F-statistika Chowova testu
-sctest(res1_HDP) # test strukturalniho zlomu na zaklade maxima F-statistiky Chowova testu
-plot(res1_HDP, main="F-statistika Chowova testu")
-#zobrazí vývoj a vyhledá kde by mohl být zlom
-lines(breakpoints(res1_HDP))
-breakpoints(res1_HDP) # datovani zlomu
+plot.ts(GDP, main="Annual GDP in Finland with Linear Trend", ylab="GDP [mil. EUR]", xlab="Year")
+lines(fitted(tslm.lin_GDP), col="blue", lwd=2)
 
-res2_HDP <- breakpoints(HDP ~ 1+time, h=0.25); res2_HDP # vypocet optimilniho poctu zlomu, delka segmentu 25 %
-summary(res2_HDP)
-plot(res2_HDP, main="Volba počtu strukturálních zlomů", xlab="počet strukturálních zlomů")
-#zapojení více zlomů
+# Chow test F-statistic to find potential structural breaks
+res1_GDP <- Fstats(GDP ~ 1 + time, from = 0.20) 
+sctest(res1_GDP) # Structural break test based on the maximum of Chow test F-statistic
+plot(res1_GDP, main="Chow Test F-Statistic")
+lines(breakpoints(res1_GDP))
+breakpoints(res1_GDP) # Setting and optimizing the break points
 
-res3_HDP <- confint(res2_HDP); res3_HDP # interval spolehlivosti
-plot(HDP, main="Znázornění strukturálních zlomů", ylab="HDP v mil. eur", xlab="období", col="grey", lwd=2)
-lines(res2_HDP)
-lines(res3_HDP, col=1)
-lines(fitted(res2_HDP), col=2, lty=1, lwd=2)
-coef(res2_HDP) # parametry trendovych primek v jednotlivych castech casove rady
-#rozdělení čř do období s různou směrnicí
+# Calculation of optimal number of break points (minimum segment length 25%)
+res2_GDP <- breakpoints(GDP ~ 1+time, h=0.25); res2_GDP
+summary(res2_GDP)
+plot(res2_GDP, main="Choosing the Number of Structural Breaks", xlab="Number of structural breaks")
+# more break points
 
-adf.test(HDP)
-pp.test(HDP)
-kpss.test(HDP)
+res3_GDP <- confint(res2_GDP); res3_GDP # confidence interval
+plot(GDP, main="Visualization of Structural Breaks", ylab="GDP [mil. EUR]", xlab="Year", col="grey", lwd=2)
+lines(res2_GDP)
+lines(res3_GDP, col=1)
+lines(fitted(res2_GDP), col=2, lty=1, lwd=2)
 
-adf.test(diff(HDP))
-pp.test(diff(HDP))
-kpss.test(diff(HDP))
-
-adf.test(diff(diff(HDP)))
-pp.test(diff(diff(HDP)))
-kpss.test(diff(diff(HDP)))
+# Trend line parameters for each segment of the time series
+coef(res2_GDP)
 
 
-HDP_fit=auto.arima(HDP, ic="aic", trace = TRUE)
-HDP_fit_diff=auto.arima(diff(HDP), ic="aic", trace = TRUE)
-HDPmodeldiff2=auto.arima(diff(diff(HDP)), ic="aic", trace = TRUE)
+# 4. STATIONARITY TESTING
+# -----------------------------------
+# Augmented Dickey-Fuller, Phillips-Perron, and KPSS tests
+# Original Series
+adf.test(GDP)
+pp.test(GDP)
+kpss.test(GDP)
 
-auto.arima(HDP)
-auto.arima(diff(HDP))
+# First Difference
+adf.test(diff(GDP))
+pp.test(diff(GDP))
+kpss.test(diff(GDP))
 
-
-arima(HDP, order = c(1,0,0))
-arima(HDP, order = c(1,1,0))
-arima(HDP, order = c(2,0,0))
-arima(HDP, order = c(0,1,1), include.mean = TRUE)
-arima(HDP, order = c(0,1,2))
-
-arima(diff(HDP), order = c(1,0,0))
-arima(diff(HDP), order = c(2,0,0))
-arima(diff(HDP), order = c(3,0,0))
-arima(diff(HDP), order = c(0,0,1), include.mean = TRUE)
-arima(diff(HDP), order = c(0,0,2), include.mean = TRUE)
-
-remove(HDP_fit_forecast)
-HDP_fit <- arima(HDP, order = c(0,1,1))
-summary(HDP_fit)
-
-HDP_diff_fit <- arima(diff(HDP), order = c(0,0,1), include.mean = TRUE)
-summary(HDP_diff_fit)
+# Second Difference
+adf.test(diff(diff(GDP)))
+pp.test(diff(diff(GDP)))
+kpss.test(diff(diff(GDP)))
 
 
-plot.ts(HDP_fit$residuals, main="Graf reziduí", lwd=2, col=5)
-hist(HDP_fit$residuals, main="Histogram reziduí", col=5)
-boxplot(HDP_fit$residuals, main="Krabicový graf reziduí", col=5)
+# 5. ARIMA MODELING
+# -----------------------------------
+# Using auto.arima for baseline comparison
+GDP_fit=auto.arima(GDP, ic="aic", trace = TRUE)
+GDP_fit_diff=auto.arima(diff(GDP), ic="aic", trace = TRUE)
+GDPmodeldiff2=auto.arima(diff(diff(GDP)), ic="aic", trace = TRUE)
 
-acf(HDP_fit$residuals, main="Autokorelační funkce reziduí")
-pacf(HDP_fit$residuals, main="Parciální autokorelační funkce reziduí")
+auto.arima(GDP)
+auto.arima(diff(GDP))
 
-Box.test(HDP_fit$residuals, lag = 10, type ="Ljung-Box")
-shapiro.test(HDP_fit$residuals)
-jarque.bera.test(HDP_fit$residuals)
+# Testing specific ARIMA specifications for Original Series
+arima(GDP, order = c(1,0,0))
+arima(GDP, order = c(1,1,0))
+arima(GDP, order = c(2,0,0))
+arima(GDP, order = c(0,1,1), include.mean = TRUE)
+arima(GDP, order = c(0,1,2))
 
+# Testing specific ARIMA specifications for First Difference
+arima(diff(GDP), order = c(1,0,0))
+arima(diff(GDP), order = c(2,0,0))
+arima(diff(GDP), order = c(3,0,0))
+arima(diff(GDP), order = c(0,0,1), include.mean = TRUE)
+arima(diff(GDP), order = c(0,0,2), include.mean = TRUE)
 
+# Final Selected Models
+GDP_fit <- arima(GDP, order = c(0,1,1))
+summary(GDP_fit)
 
-plot.ts(HDP_fit_diff$residuals, main="Graf reziduí", lwd=2, col=5)
-hist(HDP_fit_diff$residuals, main="Histogram reziduí", col=5)
-boxplot(HDP_fit_diff$residuals, main="Krabicový graf reziduí", col=5)
-
-residuals <- residuals(HDP_fit_diff)
-qqnorm(residuals)
-qqline(residuals, col=2)
-
-acf(HDP_fit_diff$residuals, main="Autokorelační funkce reziduí")
-pacf(HDP_fit_diff$residuals, main="Parciální autokorelační funkce reziduí")
-
-Box.test(HDP_fit_diff$residuals, lag = 10, type ="Ljung-Box")
-shapiro.test(HDP_fit_diff$residuals)
-jarque.bera.test(HDP_fit_diff$residuals)
-ArchTest(HDP_fit_diff$residuals)
-
-plot.ts(HDP, main = "Roční HDP ve Finsku v období 1980-2023", col = 5, lwd = 3, ylab = "HDP v mil. eur", xlab = "období")
-lines(HDP_fit$fitted, col = 2, lwd = 3)
-legend("bottomright", legend = c("skutečné", "vyrovnané"), col = c(5, 2), lwd = 2)
-
-cbind(HDP, HDP_fit$fitted) 
+GDP_diff_fit <- arima(diff(GDP), order = c(0,0,1), include.mean = TRUE)
+summary(GDP_diff_fit)
 
 
-# Predikce časové řady
-#---------------------
+# 6. RESIDUAL DIAGNOSTICS
+# -----------------------------------
+# Diagnostics for Model 1 (Original Series: ARIMA 0,1,1)
+plot.ts(GDP_fit$residuals, main="Residuals Plot (ARIMA 0,1,1)", lwd=2, col=5)
+hist(GDP_fit$residuals, main="Residuals Histogram", col=5)
+boxplot(GDP_fit$residuals, main="Residuals Boxplot", col=5)
 
-HDP_fit_diff_forecast <- forecast(HDP_fit_diff, h=5); HDP_fit_diff_forecast
-plot(HDP_fit_diff_forecast, col=5, lwd=3)
+acf(GDP_fit$residuals, main="ACF of Residuals")
+pacf(GDP_fit$residuals, main="PACF of Residuals")
 
-HDP_fit_forecast <- forecast(HDP_fit, h=5); HDP_fit_forecast
-plot(HDP_fit_forecast, col=5, lwd=2)
+# Statistical tests for residuals
+Box.test(GDP_fit$residuals, lag = 10, type ="Ljung-Box")
+shapiro.test(GDP_fit$residuals)
+jarque.bera.test(GDP_fit$residuals)
+
+# Diagnostics for Model 2 (First Difference: ARIMA 0,0,1)
+plot.ts(GDP_diff_fit$residuals, main="Residuals Plot (Differenced Model)", lwd=2, col=5)
+hist(GDP_diff_fit$residuals, main="Residuals Histogram", col=5)
+boxplot(GDP_diff_fit$residuals, main="Residuals Boxplot", col=5)
+
+residuals_diff <- residuals(GDP_diff_fit)
+qqnorm(residuals_diff)
+qqline(residuals_diff, col=2)
+
+acf(GDP_diff_fit$residuals, main="ACF of Differenced Residuals")
+pacf(GDP_diff_fit$residuals, main="PACF of Differenced Residuals")
+
+Box.test(GDP_diff_fit$residuals, lag = 10, type ="Ljung-Box")
+shapiro.test(GDP_diff_fit$residuals)
+jarque.bera.test(GDP_diff_fit$residuals)
+ArchTest(GDP_diff_fit$residuals)
+
+# Plotting actual vs fitted values
+plot.ts(GDP, main = "Annual GDP in Finland (1980-2023) - Actual vs Fitted", col = 5, lwd = 3, ylab = "GDP [mil. EUR]", xlab = "Year")
+lines(fitted(GDP_fit), col = 2, lwd = 3)
+legend("bottomright", legend = c("Actual", "Fitted"), col = c(5, 2), lwd = 2)
+
+# Compare values side-by-side
+cbind(GDP, fitted(GDP_fit))
 
 
+# 7. FORECASTING
+# -----------------------------------
+# Forecasting the next 5 periods for the differenced model
+GDP_fit_diff_forecast <- forecast(GDP_diff_fit, h=5); GDP_fit_diff_forecast
+plot(GDP_fit_diff_forecast, main="5-Year Forecast (Differenced GDP)", col=5, lwd=3)
+
+# Forecasting the next 5 periods for the original GDP model
+GDP_fit_forecast <- forecast(GDP_fit, h=5); GDP_fit_forecast
+plot(GDP_fit_forecast, main="5-Year Forecast for Finland's GDP", col=5, lwd=2)
